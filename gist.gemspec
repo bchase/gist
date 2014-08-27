@@ -17,4 +17,7 @@ Gem::Specification.new do |s|
   %w(rake rspec webmock ronn).each do |gem|
     s.add_development_dependency gem
   end
+  %w(pry).each do |gem|
+    s.add_runtime_dependency gem
+  end
 end

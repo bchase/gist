@@ -83,6 +83,10 @@ Usage: #{executable_name} [-o|-c|-e] [-p] [-s] [-R] [-d DESC] [-a] [-u URL] [-P]
     options[:update] = update
   end
 
+  opts.on(nil, "--update-by-name", "Update an existing gist by its unique name.") do |_|
+    options[:update_by_name] = true
+  end
+
   opts.on("-a", "--anonymous", "Create an anonymous gist.") do
     options[:anonymous] = true
   end

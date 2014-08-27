@@ -93,7 +93,14 @@ module Gist
       json[:files][File.basename(name)] = {:content => content}
     end
 
-    existing_gist = options[:update].to_s.split("/").last
+    if options[:update_by_name] && files.one?
+      filename = files.first.first 
+      gists = Gist.with_file filename
+      existing_gist = gists.one? ? gists.first['id'] : ''
+    else
+      existing_gist = options[:update].to_s.split("/").last
+    end
+
     if options[:anonymous]
       access_token = nil
     else
@@ -158,6 +165,15 @@ module Gist
 
       pretty_gist(response)
     end
+  end
+
+  # return all gists which include the passed filename 
+  #
+  # @params [String] filename
+  # @return [Array] array of gists which include the filename
+  def with_file(filename)
+    gists = list_gists
+    gists.select { |gist| gist['files'].keys.include? filename }
   end
 
   # return prettified string result of response body for all gists
