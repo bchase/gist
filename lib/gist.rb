@@ -140,7 +140,7 @@ module Gist
   # @param [String] user
   #
   # see https://developer.github.com/v3/gists/#list-gists
-  def list_gists(user = "")
+  def list_gists(user = "", opts={:silent => false})
     url = "#{base_path}"
 
     if user == ""
@@ -150,9 +150,6 @@ module Gist
 
         request = Net::HTTP::Get.new(url)
         response = http(api_url, request)
-
-        pretty_gist(response)
-
       else
         raise Error, "Not authenticated. Use 'gist --login' to login or 'gist -l username' to view public gists."
       end
@@ -163,8 +160,15 @@ module Gist
       request = Net::HTTP::Get.new(url)
       response = http(api_url, request)
 
-      pretty_gist(response)
     end
+
+    if response.code == '200'
+      gists_json = JSON.parse(response.body)
+    else
+      raise Error, body['message']
+    end
+
+    opts[:silent] ? gists_json : pretty_gist(gists_json)
   end
 
   # return all gists which include the passed filename 
@@ -172,7 +176,7 @@ module Gist
   # @params [String] filename
   # @return [Array] array of gists which include the filename
   def with_file(filename)
-    gists = list_gists
+    gists = list_gists('', :silent => true)
     gists.select { |gist| gist['files'].keys.include? filename }
   end
 
@@ -182,15 +186,9 @@ module Gist
   # @return [String] prettified result of listing all gists
   #
   # see https://developer.github.com/v3/gists/#response
-  def pretty_gist(response)
-    body = JSON.parse(response.body)
-    if response.code == '200'
-      body.each do |gist|
-        puts "#{gist['html_url']} #{gist['description'] || gist['files'].keys.join(" ")} #{gist['public'] ? '' : '(secret)'}\n"
-      end
-
-    else
-      raise Error, body['message']
+  def pretty_gist(json)
+    json.each do |gist|
+      puts "#{gist['html_url']} #{gist['description'] || gist['files'].keys.join(" ")} #{gist['public'] ? '' : '(secret)'}\n"
     end
   end
 
