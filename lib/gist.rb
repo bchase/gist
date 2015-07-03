@@ -12,12 +12,12 @@ end
 module Gist
   extend self
 
-  VERSION = '4.3.0'
+  VERSION = '4.4.0'
 
   # A list of clipboard commands with copy and paste support.
   CLIPBOARD_COMMANDS = {
     'xclip'   => 'xclip -o',
-    'xsel -i'    => 'xsel -o',
+    'xsel -i' => 'xsel -o',
     'pbcopy'  => 'pbpaste',
     'putclip' => 'getclip'
   }
@@ -40,11 +40,32 @@ module Gist
   end
   class ClipboardError < RuntimeError; include Error end
 
+  # helper module for authentication token actions
+  module AuthTokenFile
+    def self.filename
+      if ENV.key?(URL_ENV_NAME)
+        File.expand_path "~/.gist.#{ENV[URL_ENV_NAME].gsub(/[^a-z.]/, '')}"
+      else
+        File.expand_path "~/.gist"
+      end
+    end
+
+    def self.read
+      File.read(filename).chomp
+    end
+
+    def self.write(token)
+      File.open(filename, 'w', 0600) do |f|
+        f.write token
+      end
+    end
+  end
+
   # auth token for authentication
   #
   # @return [String] string value of access token or `nil`, if not found
   def auth_token
-    @token ||= File.read(auth_token_file) rescue nil
+    @token ||= AuthTokenFile.read rescue nil
   end
 
   # Upload a gist to https://gist.github.com
@@ -180,6 +201,40 @@ module Gist
     gists.select { |gist| gist['files'].keys.include? filename }
   end
 
+  def list_all_gists(user = "")
+    url = "#{base_path}"
+
+    if user == ""
+      access_token = auth_token()
+      if access_token.to_s != ''
+        url << "/gists?access_token=" << CGI.escape(access_token)
+        get_gist_pages(url)
+      else
+        raise Error, "Not authenticated. Use 'gist --login' to login or 'gist -l username' to view public gists."
+      end
+
+    else
+      url << "/users/#{user}/gists"
+      get_gist_pages(url)
+    end
+
+  end
+
+  def get_gist_pages(url)
+
+    request = Net::HTTP::Get.new(url)
+    response = http(api_url, request)
+    pretty_gist(response)
+
+    link_header = response.header['link']
+
+    if link_header
+      links = Hash[ link_header.gsub(/(<|>|")/, "").split(',').map { |link| link.split('; rel=') } ].invert
+      get_gist_pages(links['next']) if links['next']
+    end
+
+  end
+
   # return prettified string result of response body for all gists
   #
   # @params [Net::HTTPResponse] response
@@ -272,9 +327,7 @@ module Gist
       end
 
       if Net::HTTPCreated === response
-        File.open(auth_token_file, 'w', 0600) do |f|
-          f.write JSON.parse(response.body)['token']
-        end
+        AuthTokenFile.write JSON.parse(response.body)['token']
         puts "Success! #{ENV[URL_ENV_NAME] || "https://github.com/"}settings/applications"
         return
       elsif Net::HTTPUnauthorized === response
@@ -453,14 +506,6 @@ Could not find copy command, tried:
   # Get the API URL
   def api_url
     ENV.key?(URL_ENV_NAME) ? URI(ENV[URL_ENV_NAME]) : GITHUB_API_URL
-  end
-
-  def auth_token_file
-    if ENV.key?(URL_ENV_NAME)
-      File.expand_path "~/.gist.#{ENV[URL_ENV_NAME].gsub(/[^a-z.]/, '')}"
-    else
-      File.expand_path "~/.gist"
-    end
   end
 
   def legacy_private_gister?
